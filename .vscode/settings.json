@@ -1,0 +1,9 @@
+{
+  "zig.path": "/opt/zig/zig",
+  "zig.zls.path": "/home/frosty/.local/bin/zls",
+  "editor.formatOnSave": false,
+  "zig.formattingProvider": "on",
+  "files.associations": {
+    "*.zig": "zig"
+  }
+}
