@@ -9,10 +9,11 @@ pub const ScreenConfig = struct {
     width: i32 = 300,
     monitor: i32 = 0,
     position: rl.Vector2 = .{ .x = 0, .y = 0 },
-    
+    border: bool = true,
+
     // Runtime flag, not serialized to JSON
     needs_centering: bool = false,
-    
+
     // Custom JSON serialization to exclude needs_centering
     pub fn jsonStringify(self: ScreenConfig, jw: anytype) !void {
         try jw.beginObject();
@@ -24,6 +25,8 @@ pub const ScreenConfig = struct {
         try jw.write(self.monitor);
         try jw.objectField("position");
         try jw.write(self.position);
+        try jw.objectField("border");
+        try jw.write(self.border);
         try jw.endObject();
     }
 };
@@ -45,6 +48,7 @@ pub fn load(self: *ConfigManager, allocator: std.mem.Allocator) !ConfigManager {
         self.screen.width = 300;
         self.screen.position.x = 0;
         self.screen.position.y = 0;
+        self.screen.border = true;
         self.screen.needs_centering = true; // Flag for screenManager to center it
         return self.*;
     };

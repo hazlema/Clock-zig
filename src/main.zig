@@ -88,10 +88,11 @@ fn startGui(allocator: std.mem.Allocator) !void {
     rl.setTextureFilter(font.texture, rl.TextureFilter.point);
 
     // Window Settings
+    const undecorated = !projectCfg.screen.border;
+    std.debug.print("[WINDOW]: border={}, setting undecorated={}\n", .{ projectCfg.screen.border, undecorated });
     rl.setWindowState(rl.ConfigFlags{
         .window_resizable = true,
         .window_topmost = true,
-        .window_undecorated = false,
     });
 
     // Apply screen configuration to window (position, monitor, size)
@@ -102,13 +103,17 @@ fn startGui(allocator: std.mem.Allocator) !void {
         rl.beginDrawing();
         defer rl.endDrawing();
 
-        // keyboardHandler()
+        // Toggle border on mouse click
         if (rl.isMouseButtonReleased(rl.MouseButton.left)) {
             if (rl.isWindowState(rl.ConfigFlags{ .window_undecorated = true })) {
                 rl.clearWindowState(rl.ConfigFlags{ .window_undecorated = true });
+                projectCfg.screen.border = true;
             } else {
                 rl.setWindowState(rl.ConfigFlags{ .window_undecorated = true });
+                projectCfg.screen.border = false;
             }
+            pendingConfigSave = true;
+            lastConfigChange = std.time.milliTimestamp();
         }
 
         var timeBuffer: [32]u8 = undefined;
@@ -181,5 +186,6 @@ pub fn main() !void {
 
     // Load config (from file if exists, otherwise use defaults)
     projectCfg = try projectCfg.load(allocator);
+    std.debug.print("[CONFIG]: border={}\n", .{projectCfg.screen.border});
     try startGui(allocator);
 }
