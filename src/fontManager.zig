@@ -1,3 +1,11 @@
+//******************************************************************************
+//* Font Manager - Dynamic Font Sizing & Layout                                *
+//*                                                                            *
+//* Calculates optimal font size to fit text within window bounds and          *
+//* provides centered positioning. Ensures text scales dynamically with        *
+//* window resizing while maintaining readability.                             *
+//******************************************************************************
+
 const std = @import("std");
 const rl = @import("raylib");
 

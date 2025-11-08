@@ -1,3 +1,11 @@
+//******************************************************************************
+//* Path Manager - File & Directory Path Utilities                            *
+//*                                                                            *
+//* Provides utilities for constructing absolute paths to application         *
+//* resources (config files, assets). Ensures paths are relative to the       *
+//* executable location for portability.                                      *
+//******************************************************************************
+
 const std = @import("std");
 
 /// Get the directory containing the executable

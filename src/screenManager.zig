@@ -1,3 +1,11 @@
+//******************************************************************************
+//* Screen Manager - Window & Display Management                              *
+//*                                                                            *
+//* Manages window properties including size, position, monitor placement,    *
+//* borders, and window flags. Tracks changes to screen state and handles     *
+//* window centering and multi-monitor support.                               *
+//******************************************************************************
+
 const std = @import("std");
 const rl = @import("raylib");
 const full_cfg = @import("configManager.zig");
@@ -5,16 +13,54 @@ const cfg = @import("configManager.zig").ScreenConfig;
 
 const ScreenManager = @This();
 
+const WINDOW_CHROME_HEIGHT: i32 = 35; // Typical Linux window header/titlebar height
+
 pub var screen = cfg{};
 
+/// Called BEFORE rl.initWindow() - sets flags that must be set before window creation
+pub fn preInit() void {
+    rl.setConfigFlags(rl.ConfigFlags{
+        .msaa_4x_hint = true,
+        .window_transparent = true,
+    });
+}
+
+/// Called AFTER rl.initWindow() - applies all window settings from config
 pub fn init(saved: cfg) void {
     screen = saved;
 
-    // Apply saved settings to the window (window must already be created)
-    rl.setWindowSize(screen.width, screen.height);
+    // Set window properties
+    setResizable(true);
+    setTopmost(true);
 
     // Have to set the monitor first!
     rl.setWindowMonitor(screen.monitor);
+
+    // Check current border state (window is created with border by default)
+    const currently_has_border = !(rl.isWindowState(rl.ConfigFlags{ .window_undecorated = true }));
+
+    // Calculate the correct initial size based on border state transition
+    var initial_height = screen.height;
+    if (currently_has_border and !screen.border) {
+        // Window has border now, but config wants borderless
+        // The saved height is for borderless, so we need to account for chrome removal
+        initial_height = screen.height - WINDOW_CHROME_HEIGHT;
+    } else if (!currently_has_border and screen.border) {
+        // Window is borderless now, but config wants border
+        // The saved height is for bordered, so we need to account for chrome addition
+        initial_height = screen.height + WINDOW_CHROME_HEIGHT;
+    }
+
+    // Apply the adjusted size
+    rl.setWindowSize(screen.width, initial_height);
+
+    // Set border state BEFORE positioning to avoid position shifts
+    // Use internal version to avoid triggering resize logic during init
+    if (screen.border) {
+        rl.clearWindowState(rl.ConfigFlags{ .window_undecorated = true });
+    } else {
+        rl.setWindowState(rl.ConfigFlags{ .window_undecorated = true });
+    }
 
     // Center the window if needs_centering flag is set (first run with no config)
     if (screen.needs_centering) {
@@ -31,13 +77,6 @@ pub fn init(saved: cfg) void {
     }
 
     rl.setWindowPosition(@intFromFloat(screen.position.x), @intFromFloat(screen.position.y));
-    rl.setWindowState(rl.ConfigFlags{ .window_undecorated = !screen.border });
-
-    // Setting fn's
-    // void setWindowMinSize(int width, int height);               // Set window minimum dimensions (for FLAG_WINDOW_RESIZABLE)
-    // void setWindowMaxSize(int width, int height);               // Set window maximum dimensions (for FLAG_WINDOW_RESIZABLE)
-    // void setWindowOpacity(float opacity);                       // Set window opacity [0.0f..1.0f]
-    // void setWindowFocused(void);
 }
 
 pub fn update() ?cfg {
@@ -60,4 +99,53 @@ pub fn update() ?cfg {
 
     // nothing changed
     return null;
+}
+
+/// Toggle or set window border state with automatic height adjustment
+pub fn setBorder(has_border: bool) void {
+    const is_currently_undecorated = rl.isWindowState(rl.ConfigFlags{ .window_undecorated = true });
+    const currently_has_border = !is_currently_undecorated;
+
+    // Only adjust if state is actually changing
+    if (currently_has_border == has_border) {
+        return;
+    }
+
+    const current_width = rl.getScreenWidth();
+    const current_height = rl.getScreenHeight();
+
+    if (has_border) {
+        // Going from borderless to bordered - shrink height to compensate for chrome
+        rl.clearWindowState(rl.ConfigFlags{ .window_undecorated = true });
+        rl.setWindowSize(current_width, current_height - WINDOW_CHROME_HEIGHT);
+    } else {
+        // Going from bordered to borderless - grow height to maintain content area
+        rl.setWindowState(rl.ConfigFlags{ .window_undecorated = true });
+        rl.setWindowSize(current_width, current_height + WINDOW_CHROME_HEIGHT);
+    }
+
+    screen.border = has_border;
+}
+
+/// Toggle window border (convenience function)
+pub fn toggleBorder() void {
+    setBorder(!screen.border);
+}
+
+/// Set window to always be on top
+pub fn setTopmost(enabled: bool) void {
+    if (enabled) {
+        rl.setWindowState(rl.ConfigFlags{ .window_topmost = true });
+    } else {
+        rl.clearWindowState(rl.ConfigFlags{ .window_topmost = true });
+    }
+}
+
+/// Set window resizable state
+pub fn setResizable(enabled: bool) void {
+    if (enabled) {
+        rl.setWindowState(rl.ConfigFlags{ .window_resizable = true });
+    } else {
+        rl.clearWindowState(rl.ConfigFlags{ .window_resizable = true });
+    }
 }

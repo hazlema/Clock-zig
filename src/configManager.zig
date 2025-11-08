@@ -1,3 +1,11 @@
+//******************************************************************************
+//* Config Manager - Configuration Persistence                                 *
+//*                                                                            *
+//* Manages loading and saving application configuration to JSON file.         *
+//* Handles screen settings (size, position, monitor, border) with             *
+//* debounced auto-save to prevent excessive disk writes.                      *
+//******************************************************************************
+
 const std = @import("std");
 const rl = @import("raylib");
 const pathManager = @import("pathManager.zig");
