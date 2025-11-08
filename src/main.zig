@@ -21,14 +21,76 @@ var projectCfg = configManager{};
 var pendingConfigSave = false;
 var lastConfigChange: i64 = 0;
 
-fn keyHandler() void {
-    // Toggle border on mouse click
+// Drag-to-move state tracking
+var isDragging = false;
+var ignoreNextRelease = false;
+var dragOffset: rl.Vector2 = undefined; // Offset from window top-left to initial click position
+var dragStartWindowPos: rl.Vector2 = undefined; // Window position when drag started
+
+fn inputHandler() void {
+    // Mouse button pressed - calculate the offset from window top-left to click position
+    if (rl.isMouseButtonPressed(rl.MouseButton.left)) {
+        const mouseLocal = rl.getMousePosition();
+        dragStartWindowPos = rl.getWindowPosition();
+        // Store the offset from window's top-left corner to where we clicked
+        dragOffset = mouseLocal;
+        isDragging = false;
+        ignoreNextRelease = false;
+    }
+
+    // Mouse button held down - check for drag movement (only in borderless mode)
+    if (rl.isMouseButtonDown(rl.MouseButton.left) and !screenManager.screen.border) {
+        const mouseLocal = rl.getMousePosition();
+
+        const dragThreshold: f32 = 5.0;
+
+        // Start dragging if moved beyond threshold
+        if (!isDragging) {
+            const totalDelta = rl.Vector2{
+                .x = mouseLocal.x - dragOffset.x,
+                .y = mouseLocal.y - dragOffset.y,
+            };
+            if (@abs(totalDelta.x) > dragThreshold or @abs(totalDelta.y) > dragThreshold) {
+                isDragging = true;
+            }
+        }
+
+        // Move window during drag - position window so click point stays under cursor
+        if (isDragging) {
+            // Calculate the delta from where the drag started
+            const mouseDelta = rl.Vector2{
+                .x = mouseLocal.x - dragOffset.x,
+                .y = mouseLocal.y - dragOffset.y,
+            };
+
+            // Position window based on original position plus mouse movement
+            const newPos = rl.Vector2{
+                .x = dragStartWindowPos.x + mouseDelta.x,
+                .y = dragStartWindowPos.y + mouseDelta.y,
+            };
+
+            rl.setWindowPosition(@intFromFloat(newPos.x), @intFromFloat(newPos.y));
+            ignoreNextRelease = true;
+        }
+    }
+
+    // Mouse button released - either finish drag or toggle border
     if (rl.isMouseButtonReleased(rl.MouseButton.left)) {
-        screenManager.toggleBorder();
-        // Get full screen state (including current size/position) after toggle
-        projectCfg.screen = screenManager.screen;
-        pendingConfigSave = true;
-        lastConfigChange = std.time.milliTimestamp();
+        if (ignoreNextRelease) {
+            // Drag completed - manually update screen position since we blocked screenManager.update()
+            ignoreNextRelease = false;
+            isDragging = false;
+            screenManager.screen.position = rl.getWindowPosition();
+            projectCfg.screen = screenManager.screen;
+            pendingConfigSave = true;
+            lastConfigChange = std.time.milliTimestamp();
+        } else {
+            // Regular click - toggle border
+            screenManager.toggleBorder();
+            projectCfg.screen = screenManager.screen;
+            pendingConfigSave = true;
+            lastConfigChange = std.time.milliTimestamp();
+        }
     }
 }
 
@@ -41,7 +103,9 @@ fn startGui(allocator: std.mem.Allocator) !void {
     rl.setTargetFPS(60);
 
     // Get absolute path to font asset
-    const font_path = try pathManager.getAssetPath("RobotoMonoNerdFont-Bold.ttf", allocator);
+    //const font_path = try pathManager.getAssetPath("KenneyFuture.ttf", allocator);
+    //const font_path = try pathManager.getAssetPath("RobotoMono-Bold.ttf", allocator);
+    const font_path = try pathManager.getAssetPath("Cousine-Bold.ttf", allocator);
     defer allocator.free(font_path);
 
     // Create null-terminated string for Raylib
@@ -49,7 +113,7 @@ fn startGui(allocator: std.mem.Allocator) !void {
     defer allocator.free(font_path_z);
 
     // Load Font / Point filtering for crisp pixel-perfect text
-    const font = try rl.loadFontEx(font_path_z, 256, null);
+    const font = try rl.loadFontEx(font_path_z, 512, null);
     rl.setTextureFilter(font.texture, rl.TextureFilter.point);
 
     // Defer order is backwards (FILO) - If you reverse these, onClose will be a segfault
@@ -71,18 +135,20 @@ fn startGui(allocator: std.mem.Allocator) !void {
         rl.beginDrawing();
         defer rl.endDrawing();
 
-        keyHandler();
+        inputHandler();
         rl.clearBackground(rl.Color{ .r = 0, .g = 0, .b = 33, .a = 200 });
 
         // Draw the colored time (handles formatting, parsing, and rendering)
         try displayManager.drawColoredTime(font);
 
-        // Check if screen config changed
-        const screenChanged = screenManager.update();
-        if (screenChanged) |newScreen| {
-            projectCfg.screen = newScreen;
-            pendingConfigSave = true;
-            lastConfigChange = std.time.milliTimestamp();
+        // Check if screen config changed (but not during drag to avoid feedback loops)
+        if (!isDragging) {
+            const screenChanged = screenManager.update();
+            if (screenChanged) |newScreen| {
+                projectCfg.screen = newScreen;
+                pendingConfigSave = true;
+                lastConfigChange = std.time.milliTimestamp();
+            }
         }
 
         // Debounced save: only save if 1 second passed since last change
