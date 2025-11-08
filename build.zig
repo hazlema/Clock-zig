@@ -25,6 +25,11 @@ pub fn build(b: *std.Build) void {
     });
 
     exe.linkLibrary(raylib_artifact);
+
+    // Disable LTO when using optimized builds to avoid linker warnings
+    // with shared system libraries (X11, GLX, etc.) used by RayLib
+    exe.want_lto = false;
+
     b.installArtifact(exe);
 
     // Install assets directory alongside the executable
