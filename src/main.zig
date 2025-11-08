@@ -21,75 +21,70 @@ var projectCfg = configManager{};
 var pendingConfigSave = false;
 var lastConfigChange: i64 = 0;
 
+var isMouseDown = false;
+var lastMousePosition: ?rl.Vector2 = null;
+
 // Drag-to-move state tracking
 var isDragging = false;
-var ignoreNextRelease = false;
-var dragOffset: rl.Vector2 = undefined; // Offset from window top-left to initial click position
-var dragStartWindowPos: rl.Vector2 = undefined; // Window position when drag started
+var dragOffset: ?rl.Vector2 = null; // Where in the window we clicked (window-space)
+var lastDragMousePos: ?rl.Vector2 = null; // Last mouse position during drag to detect movement
 
 fn inputHandler() void {
-    // Mouse button pressed - calculate the offset from window top-left to click position
+    const mousePosition = rl.getMousePosition();
+
+    // User clicks the clock window - calculate offset
     if (rl.isMouseButtonPressed(rl.MouseButton.left)) {
-        const mouseLocal = rl.getMousePosition();
-        dragStartWindowPos = rl.getWindowPosition();
-        // Store the offset from window's top-left corner to where we clicked
-        dragOffset = mouseLocal;
-        isDragging = false;
-        ignoreNextRelease = false;
+        if (dragOffset == null) {
+            isMouseDown = true;
+            lastMousePosition = mousePosition;
+            lastDragMousePos = mousePosition;
+            // dragOffset is where we clicked within the window
+            dragOffset = mousePosition;
+            screenManager.screen.suspended = true;
+            std.debug.print("mousedown\n", .{});
+        }
     }
 
-    // Mouse button held down - check for drag movement (only in borderless mode)
-    if (rl.isMouseButtonDown(rl.MouseButton.left) and !screenManager.screen.border) {
-        const mouseLocal = rl.getMousePosition();
+    if (rl.isMouseButtonReleased(rl.MouseButton.left) and dragOffset != null) {
+        isMouseDown = false;
+        dragOffset = null;
+        lastDragMousePos = null;
+        defer {
+            screenManager.screen.suspended = false;
+        }
 
-        const dragThreshold: f32 = 5.0;
+        // Was not a drag - check if mouse position didn't change
+        if (lastMousePosition) |lastPos| {
+            const lastX: i32 = @intFromFloat(@floor(lastPos.x));
+            const lastY: i32 = @intFromFloat(@floor(lastPos.y));
 
-        // Start dragging if moved beyond threshold
-        if (!isDragging) {
-            const totalDelta = rl.Vector2{
-                .x = mouseLocal.x - dragOffset.x,
-                .y = mouseLocal.y - dragOffset.y,
-            };
-            if (@abs(totalDelta.x) > dragThreshold or @abs(totalDelta.y) > dragThreshold) {
-                isDragging = true;
+            const mouseX: i32 = @intFromFloat(@floor(mousePosition.x));
+            const mouseY: i32 = @intFromFloat(@floor(mousePosition.y));
+
+            if (lastX == mouseX and lastY == mouseY) {
+                screenManager.toggleBorder();
             }
         }
+        lastMousePosition = null;
 
-        // Move window during drag - position window so click point stays under cursor
-        if (isDragging) {
-            // Calculate the delta from where the drag started
-            const mouseDelta = rl.Vector2{
-                .x = mouseLocal.x - dragOffset.x,
-                .y = mouseLocal.y - dragOffset.y,
-            };
-
-            // Position window based on original position plus mouse movement
-            const newPos = rl.Vector2{
-                .x = dragStartWindowPos.x + mouseDelta.x,
-                .y = dragStartWindowPos.y + mouseDelta.y,
-            };
-
-            rl.setWindowPosition(@intFromFloat(newPos.x), @intFromFloat(newPos.y));
-            ignoreNextRelease = true;
-        }
+        std.debug.print("mouseup\n", .{});
     }
 
-    // Mouse button released - either finish drag or toggle border
-    if (rl.isMouseButtonReleased(rl.MouseButton.left)) {
-        if (ignoreNextRelease) {
-            // Drag completed - manually update screen position since we blocked screenManager.update()
-            ignoreNextRelease = false;
-            isDragging = false;
-            screenManager.screen.position = rl.getWindowPosition();
-            projectCfg.screen = screenManager.screen;
-            pendingConfigSave = true;
-            lastConfigChange = std.time.milliTimestamp();
-        } else {
-            // Regular click - toggle border
-            screenManager.toggleBorder();
-            projectCfg.screen = screenManager.screen;
-            pendingConfigSave = true;
-            lastConfigChange = std.time.milliTimestamp();
+    if (dragOffset) |offset| {
+        // Only update if mouse actually moved to prevent jitter
+        if (lastDragMousePos) |lastPos| {
+            if (lastPos.x != mousePosition.x or lastPos.y != mousePosition.y) {
+                // Get the actual current window position to convert mouse coords properly
+                const actualWindowPos = rl.getWindowPosition();
+                // Convert mouse from window-space to screen-space
+                const mouseScreenPos = mousePosition.add(actualWindowPos);
+                // Calculate where window should be (mouse screen pos - where we clicked in window)
+                const newWindowPos = mouseScreenPos.subtract(offset);
+                // Move the window
+                rl.setWindowPosition(@intFromFloat(newWindowPos.x), @intFromFloat(newWindowPos.y));
+                // Update last position
+                lastDragMousePos = mousePosition;
+            }
         }
     }
 }

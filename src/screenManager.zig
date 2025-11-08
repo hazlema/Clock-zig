@@ -80,6 +80,10 @@ pub fn init(saved: cfg) void {
 }
 
 pub fn update() ?cfg {
+	if (screen.suspended == true) {
+		return null;
+	}
+
     const w: i32 = rl.getRenderWidth();
     const h: i32 = rl.getRenderHeight();
     const pos: rl.Vector2 = rl.getWindowPosition();

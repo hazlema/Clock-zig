@@ -18,11 +18,9 @@ pub const ScreenConfig = struct {
     monitor: i32 = 0,
     position: rl.Vector2 = .{ .x = 0, .y = 0 },
     border: bool = true,
-
-    // Runtime flag, not serialized to JSON
     needs_centering: bool = false,
+    suspended: bool = false,
 
-    // Custom JSON serialization to exclude needs_centering
     pub fn jsonStringify(self: ScreenConfig, jw: anytype) !void {
         try jw.beginObject();
         try jw.objectField("height");
@@ -58,6 +56,8 @@ pub fn load(self: *ConfigManager, allocator: std.mem.Allocator) !ConfigManager {
         self.screen.position.y = 0;
         self.screen.border = true;
         self.screen.needs_centering = true; // Flag for screenManager to center it
+        self.screen.suspended = false; // Flag for screenManager to center it
+		
         return self.*;
     };
     defer allocator.free(contents);
