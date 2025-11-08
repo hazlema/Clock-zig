@@ -21,11 +21,7 @@ var projectCfg = configManager{};
 var pendingConfigSave = false;
 var lastConfigChange: i64 = 0;
 
-var isMouseDown = false;
-var lastMousePosition: ?rl.Vector2 = null;
-
 // Drag-to-move state tracking
-var isDragging = false;
 var dragOffset: ?rl.Vector2 = null; // Where in the window we clicked (window-space)
 var lastDragMousePos: ?rl.Vector2 = null; // Last mouse position during drag to detect movement
 
@@ -35,38 +31,34 @@ fn inputHandler() void {
     // User clicks the clock window - calculate offset
     if (rl.isMouseButtonPressed(rl.MouseButton.left)) {
         if (dragOffset == null) {
-            isMouseDown = true;
-            lastMousePosition = mousePosition;
-            lastDragMousePos = mousePosition;
             // dragOffset is where we clicked within the window
             dragOffset = mousePosition;
+            lastDragMousePos = mousePosition;
             screenManager.screen.suspended = true;
             std.debug.print("mousedown\n", .{});
         }
     }
 
     if (rl.isMouseButtonReleased(rl.MouseButton.left) and dragOffset != null) {
-        isMouseDown = false;
-        dragOffset = null;
         lastDragMousePos = null;
         defer {
             screenManager.screen.suspended = false;
         }
 
-        // Was not a drag - check if mouse position didn't change
-        if (lastMousePosition) |lastPos| {
-            const lastX: i32 = @intFromFloat(@floor(lastPos.x));
-            const lastY: i32 = @intFromFloat(@floor(lastPos.y));
+        // Was not a drag - check if mouse position didn't change from click start
+        if (dragOffset) |clickPos| {
+            const clickX: i32 = @intFromFloat(@floor(clickPos.x));
+            const clickY: i32 = @intFromFloat(@floor(clickPos.y));
 
             const mouseX: i32 = @intFromFloat(@floor(mousePosition.x));
             const mouseY: i32 = @intFromFloat(@floor(mousePosition.y));
 
-            if (lastX == mouseX and lastY == mouseY) {
+            if (clickX == mouseX and clickY == mouseY) {
                 screenManager.toggleBorder();
             }
         }
-        lastMousePosition = null;
 
+        dragOffset = null;
         std.debug.print("mouseup\n", .{});
     }
 
@@ -136,14 +128,12 @@ fn startGui(allocator: std.mem.Allocator) !void {
         // Draw the colored time (handles formatting, parsing, and rendering)
         try displayManager.drawColoredTime(font);
 
-        // Check if screen config changed (but not during drag to avoid feedback loops)
-        if (!isDragging) {
-            const screenChanged = screenManager.update();
-            if (screenChanged) |newScreen| {
-                projectCfg.screen = newScreen;
-                pendingConfigSave = true;
-                lastConfigChange = std.time.milliTimestamp();
-            }
+        // Check if screen config changed (suspended during drag via screenManager.screen.suspended)
+        const screenChanged = screenManager.update();
+        if (screenChanged) |newScreen| {
+            projectCfg.screen = newScreen;
+            pendingConfigSave = true;
+            lastConfigChange = std.time.milliTimestamp();
         }
 
         // Debounced save: only save if 1 second passed since last change
