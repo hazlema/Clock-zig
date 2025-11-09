@@ -25,6 +25,17 @@ var lastConfigChange: i64 = 0;
 var dragOffset: ?rl.Vector2 = null; // Where in the window we clicked (window-space)
 var lastDragMousePos: ?rl.Vector2 = null; // Last mouse position during drag to detect movement
 
+/// Handles all mouse input for window dragging and border toggling
+///
+/// Behavior:
+///   - Click and drag: Moves window by tracking mouse delta
+///   - Click without drag: Toggles window border on/off
+///   - Suspends config auto-save during drag to prevent file spam
+///
+/// State management:
+///   - dragOffset: Stores click position within window (null when not dragging)
+///   - lastDragMousePos: Tracks previous mouse position to detect actual movement
+///   - screenManager.screen.suspended: Prevents config updates during drag
 fn inputHandler() void {
     const mousePosition = rl.getMousePosition();
 
@@ -81,6 +92,20 @@ fn inputHandler() void {
     }
 }
 
+/// Initializes window, loads resources, and runs the main render loop
+/// Handles complete application lifecycle from window creation to cleanup
+///
+/// Lifecycle:
+///   1. Pre-init: Set window flags (MSAA, transparency) before window creation
+///   2. Create window and load font at high resolution (512pt)
+///   3. Apply saved config (monitor, position, size, border)
+///   4. Main loop: Input → Render → Auto-save detection
+///   5. Cleanup: Save pending config → Close window → Unload font
+///
+/// Defer chain ensures proper cleanup order (config → window → font)
+///
+/// Parameters:
+///   - allocator: Memory allocator for file I/O and path operations
 fn startGui(allocator: std.mem.Allocator) !void {
     // Pre-window initialization (MSAA, transparency must be set before window creation)
     screenManager.preInit();
@@ -148,6 +173,8 @@ fn startGui(allocator: std.mem.Allocator) !void {
     }
 }
 
+/// Application entry point
+/// Sets up memory allocator, loads configuration, and launches GUI
 pub fn main() !void {
     // set mem
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};

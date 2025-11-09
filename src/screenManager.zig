@@ -17,7 +17,10 @@ const WINDOW_CHROME_HEIGHT: i32 = 35; // Typical Linux window header/titlebar he
 
 pub var screen = cfg{};
 
-/// Called BEFORE rl.initWindow() - sets flags that must be set before window creation
+/// Initializes window flags that MUST be set before window creation
+/// Sets MSAA 4x antialiasing and window transparency
+///
+/// CRITICAL: Must be called BEFORE rl.initWindow() or flags won't take effect
 pub fn preInit() void {
     rl.setConfigFlags(rl.ConfigFlags{
         .msaa_4x_hint = true,
@@ -25,7 +28,14 @@ pub fn preInit() void {
     });
 }
 
-/// Called AFTER rl.initWindow() - applies all window settings from config
+/// Applies all window configuration from saved config
+/// Handles monitor selection, border state transitions, size adjustments, and positioning
+/// If needs_centering flag is set (first run), centers window on target monitor
+///
+/// CRITICAL: Must be called AFTER rl.initWindow()
+///
+/// Parameters:
+///   - saved: ScreenConfig with desired window settings
 pub fn init(saved: cfg) void {
     screen = saved;
 
@@ -79,6 +89,11 @@ pub fn init(saved: cfg) void {
     rl.setWindowPosition(@intFromFloat(screen.position.x), @intFromFloat(screen.position.y));
 }
 
+/// Polls current window state and detects changes
+/// Compares current window properties (size, position, monitor, border) against cached state
+/// Respects suspended flag to prevent updates during drag operations
+///
+/// Returns: Updated ScreenConfig if any property changed, null otherwise
 pub fn update() ?cfg {
 	if (screen.suspended == true) {
 		return null;
@@ -105,7 +120,17 @@ pub fn update() ?cfg {
     return null;
 }
 
-/// Toggle or set window border state with automatic height adjustment
+/// Sets window border state with automatic height compensation
+/// Adjusts window height by ±35px (WINDOW_CHROME_HEIGHT) to maintain consistent content area
+///
+/// Height adjustment logic:
+///   - Adding border: Subtracts 35px (content area shrinks, chrome added)
+///   - Removing border: Adds 35px (content area expands, chrome removed)
+///
+/// This ensures click detection matches visual bounds regardless of border state
+///
+/// Parameters:
+///   - has_border: true to show titlebar/border, false for borderless
 pub fn setBorder(has_border: bool) void {
     const is_currently_undecorated = rl.isWindowState(rl.ConfigFlags{ .window_undecorated = true });
     const currently_has_border = !is_currently_undecorated;
@@ -131,12 +156,17 @@ pub fn setBorder(has_border: bool) void {
     screen.border = has_border;
 }
 
-/// Toggle window border (convenience function)
+/// Toggles window border on/off
+/// Convenience wrapper around setBorder() that flips current state
 pub fn toggleBorder() void {
     setBorder(!screen.border);
 }
 
-/// Set window to always be on top
+/// Controls whether window stays on top of other windows
+/// Useful for clock/widget applications that should remain visible
+///
+/// Parameters:
+///   - enabled: true to keep window on top, false for normal layering
 pub fn setTopmost(enabled: bool) void {
     if (enabled) {
         rl.setWindowState(rl.ConfigFlags{ .window_topmost = true });
@@ -145,7 +175,10 @@ pub fn setTopmost(enabled: bool) void {
     }
 }
 
-/// Set window resizable state
+/// Controls whether user can resize window by dragging edges
+///
+/// Parameters:
+///   - enabled: true to allow resizing, false to lock size
 pub fn setResizable(enabled: bool) void {
     if (enabled) {
         rl.setWindowState(rl.ConfigFlags{ .window_resizable = true });

@@ -17,6 +17,9 @@ const c = @cImport({
 // Color code parsing
 const allowed_color_codes = [_]u8{ '0', '1', '2' };
 
+/// Iterator for parsing color-coded text segments
+/// Processes strings with embedded color codes (e.g., "|0text|1more")
+/// and splits them into segments with associated color indices
 const ColorCodeIterator = struct {
     buffer: []const u8,
     index: usize = 0,
@@ -30,6 +33,8 @@ const ColorCodeIterator = struct {
         color: ?u8, // null means default color, 0-9 for color codes
     };
 
+    /// Advances to the next color-coded segment
+    /// Returns: Segment with text and optional color code, or null if exhausted
     fn next(self: *ColorCodeIterator) ?Segment {
         if (self.index >= self.buffer.len) return null;
 
@@ -64,7 +69,12 @@ const ColorCodeIterator = struct {
     }
 };
 
-/// Get the local time / date from time.h (better date/time support please zig)
+/// Retrieves current local time using C's time.h library
+/// Converts to 12-hour format with AM/PM designation
+///
+/// Note: Uses libc localtime() because Zig's standard library lacks robust timezone support
+///
+/// Returns: Anonymous struct with time/date components (12-hour format with AM/PM)
 fn getLocalDateTime() struct { month: u8, day: u8, year: u32, seconds: u8, minutes: u8, hours: u8, ampm: [:0]const u8 } {
     const now = std.time.timestamp();
     const now_c: c.time_t = @intCast(now);
@@ -88,8 +98,20 @@ fn getLocalDateTime() struct { month: u8, day: u8, year: u32, seconds: u8, minut
     };
 }
 
-/// Draws the current time with color-coded segments
-/// Handles all time formatting, parsing, and rendering
+/// Renders the current time with color-coded segments (digits, colons, AM/PM)
+/// Handles complete time display pipeline:
+///   1. Fetches current time via getLocalDateTime()
+///   2. Formats with color codes: |0HH|1:|0MM|1:|0SS |2AM/PM
+///   3. Auto-scales font to fit window using fontManager
+///   4. Parses and renders each segment with ColorCodeIterator
+///
+/// Color mapping:
+///   - |0: White (digits)
+///   - |1: Yellow (colons)
+///   - |2: Blue (AM/PM)
+///
+/// Parameters:
+///   - font: RayLib font loaded at high resolution for scaling
 pub fn drawColoredTime(font: rl.Font) !void {
     // Get current time
     const curDateTime = getLocalDateTime();

@@ -21,6 +21,9 @@ pub const ScreenConfig = struct {
     needs_centering: bool = false,
     suspended: bool = false,
 
+    /// Custom JSON serialization for ScreenConfig
+    /// Excludes runtime-only flags (needs_centering, suspended) from serialization
+    /// These flags are used for internal state management and should not persist
     pub fn jsonStringify(self: ScreenConfig, jw: anytype) !void {
         try jw.beginObject();
         try jw.objectField("height");
@@ -40,6 +43,14 @@ pub const ScreenConfig = struct {
 version: f32 = 1.0,
 screen: ScreenConfig = .{},
 
+/// Loads configuration from disk (clock.json in executable directory)
+/// If config file doesn't exist, returns default values with needs_centering=true
+/// which triggers automatic window centering on first run
+///
+/// Parameters:
+///   - allocator: Memory allocator for file I/O operations
+///
+/// Returns: ConfigManager instance populated from disk or defaults
 pub fn load(self: *ConfigManager, allocator: std.mem.Allocator) !ConfigManager {
     // Get absolute path to config file
     const config_path = try pathManager.getConfigPath(allocator);
@@ -57,7 +68,7 @@ pub fn load(self: *ConfigManager, allocator: std.mem.Allocator) !ConfigManager {
         self.screen.border = true;
         self.screen.needs_centering = true; // Flag for screenManager to center it
         self.screen.suspended = false; // Flag for screenManager to center it
-		
+
         return self.*;
     };
     defer allocator.free(contents);
@@ -70,13 +81,28 @@ pub fn load(self: *ConfigManager, allocator: std.mem.Allocator) !ConfigManager {
     return parsed.value;
 }
 
+/// Serializes configuration to JSON string with 4-space indentation
+/// Uses custom jsonStringify methods to control which fields are persisted
+///
+/// Parameters:
+///   - allocator: Memory allocator for JSON string buffer
+///
+/// Returns: Owned JSON string (caller must free)
 pub fn serialize(self: *ConfigManager, allocator: std.mem.Allocator) ![]u8 {
     var out = std.Io.Writer.Allocating.init(allocator);
     errdefer out.deinit();
-    try std.json.Stringify.value(self.*, .{ .whitespace = .indent_2 }, &out.writer);
+    try std.json.Stringify.value(self.*, .{ .whitespace = .indent_4 }, &out.writer);
     return out.toOwnedSlice();
 }
 
+/// Saves current configuration to disk (clock.json in executable directory)
+/// Creates or overwrites the config file with current settings
+/// Called during debounced auto-save and on application exit
+///
+/// Parameters:
+///   - allocator: Memory allocator for serialization and path operations
+///
+/// Returns: true on successful save
 pub fn save(self: *ConfigManager, allocator: std.mem.Allocator) !bool {
     const json = try self.serialize(allocator);
     defer allocator.free(json);

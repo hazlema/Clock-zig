@@ -8,8 +8,10 @@
 
 const std = @import("std");
 
-/// Get the directory containing the executable
-/// Caller owns returned memory
+/// Retrieves the directory containing the current executable
+/// All application paths are relative to this directory for portability
+///
+/// Returns: Absolute path to executable directory (caller owns memory)
 pub fn getExeDir(allocator: std.mem.Allocator) ![]u8 {
     var buf: [std.fs.max_path_bytes]u8 = undefined;
     const exe_path = try std.fs.selfExePath(&buf);
@@ -17,16 +19,23 @@ pub fn getExeDir(allocator: std.mem.Allocator) ![]u8 {
     return allocator.dupe(u8, exe_dir);
 }
 
-/// Get full path to config file (exe_dir/clock.json)
-/// Caller owns returned memory
+/// Constructs absolute path to configuration file
+/// Config is stored as 'clock.json' in the executable directory
+///
+/// Returns: Absolute path to clock.json (caller owns memory)
 pub fn getConfigPath(allocator: std.mem.Allocator) ![]u8 {
     const exe_dir = try getExeDir(allocator);
     defer allocator.free(exe_dir);
     return std.fs.path.join(allocator, &[_][]const u8{ exe_dir, "clock.json" });
 }
 
-/// Get full path to an asset file (exe_dir/assets/filename)
-/// Caller owns returned memory
+/// Constructs absolute path to an asset file in the assets subdirectory
+/// Assets are expected in '{exe_dir}/assets/' (fonts, images, etc.)
+///
+/// Parameters:
+///   - filename: Name of asset file (e.g., "RobotoMono-Bold.ttf")
+///
+/// Returns: Absolute path to asset (caller owns memory)
 pub fn getAssetPath(filename: []const u8, allocator: std.mem.Allocator) ![]u8 {
     const exe_dir = try getExeDir(allocator);
     defer allocator.free(exe_dir);
